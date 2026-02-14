@@ -427,8 +427,21 @@ with col2:
     webrtc_streamer(
         key="locus-safe",
         mode=WebRtcMode.SENDRECV,
-        rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
+        rtc_configuration={
+            "iceServers": [
+                {"urls": ["stun:stun.l.google.com:19302"]},
+                {"urls": ["stun:stun1.l.google.com:19302"]},
+                {"urls": ["stun:stun2.l.google.com:19302"]},
+            ]
+        },
         video_processor_factory=BlinkProcessor,
-        media_stream_constraints={"video": {"width": 1024, "height": 720}, "audio": False},
+        media_stream_constraints={
+            "video": {
+                "width": {"ideal": 1024},
+                "height": {"ideal": 720},
+                "facingMode": "user"  # Front camera on mobile
+            },
+            "audio": False
+        },
         async_processing=True,
     )
