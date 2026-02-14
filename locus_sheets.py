@@ -190,14 +190,8 @@ class BlinkProcessor:
         self.total_students = len(all_student_names)
         self.present_count = 0
         self.present_set = set()
-        
-        # Load present students from Google Sheets (lazy)
-        sheet = ensure_sheets_connected()
-        if sheet:
-            present_list = get_present_students(sheet)
-            valid_present = [x for x in present_list if x in all_student_names]
-            self.present_set = set(valid_present)
-            self.present_count = len(self.present_set)
+        self.present_set = set()
+        self.sheets_loaded = False
 
     def reset_liveness(self):
         """Reset liveness detection state"""
@@ -263,6 +257,20 @@ class BlinkProcessor:
             img = frame.to_ndarray(format="bgr24")
             self.frame_count += 1
             img = cv2.flip(img, 1)
+            if not self.sheets_loaded:
+                try:
+                    sheet = ensure_sheets_connected()
+                    if sheet:
+                        present_list = get_present_students(sheet)
+                        valid_present = [x for x in present_list if x in all_student_names]
+                        self.present_set = set(valid_present)
+                        self.present_count = len(self.present_set)
+                    self.sheets_loaded = True
+                except:
+                    self.sheets_loaded = True
+
+            if not self.model_loaded:
+
 
             if not self.model_loaded:
                 cv2.putText(img, self.status_msg, (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
@@ -435,5 +443,5 @@ with col2:
             "video": {"width": 640, "height": 480},
             "audio": False
         },
-        async_processing=False,
+        async_processing=True,
     )
