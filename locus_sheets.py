@@ -257,6 +257,8 @@ class BlinkProcessor:
             img = frame.to_ndarray(format="bgr24")
             self.frame_count += 1
             img = cv2.flip(img, 1)
+            
+            # Load present students on first frame only
             if not self.sheets_loaded:
                 try:
                     sheet = ensure_sheets_connected()
@@ -268,9 +270,6 @@ class BlinkProcessor:
                     self.sheets_loaded = True
                 except:
                     self.sheets_loaded = True
-
-            if not self.model_loaded:
-
 
             if not self.model_loaded:
                 cv2.putText(img, self.status_msg, (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
