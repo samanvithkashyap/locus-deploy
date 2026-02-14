@@ -424,7 +424,7 @@ else:
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     st.caption("Turn your head slowly to verify & mark attendance.")
-    ctx = webrtc_streamer(
+    webrtc_streamer(
         key="locus-attendance",
         mode=WebRtcMode.SENDRECV,
         rtc_configuration={
@@ -432,8 +432,8 @@ with col2:
         },
         video_processor_factory=BlinkProcessor,
         media_stream_constraints={
-            "video": True,
+            "video": {"width": 640, "height": 480},
             "audio": False
         },
-        async_processing=True,
+        async_processing=False,
     )
