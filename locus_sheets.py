@@ -173,6 +173,7 @@ class BlinkProcessor:
                 detector_path, "", (320, 320), 0.9, 0.3, 5000
             )
         except Exception as e:
+            print(f"Detector error: {e}")
             self.detector = None
             self.status_msg = f"ERROR: Detector Missing"
 
@@ -180,18 +181,21 @@ class BlinkProcessor:
             recognizer_path = os.path.join(MODELS_DIR, "face_recognition_sface_2021dec.onnx")
             self.recognizer = cv2.FaceRecognizerSF.create(recognizer_path, "")
         except Exception as e:
+            print(f"Recognizer error: {e}")
             self.recognizer = None
             if self.status_msg == "Look at Camera":
                 self.status_msg = f"ERROR: Recognizer Missing"
 
         self.model_loaded = self.detector is not None and self.recognizer is not None
+        print(f"Models loaded: {self.model_loaded}")
 
-        # Counter Logic
+        # Counter Logic - DON'T load sheets here
         self.total_students = len(all_student_names)
         self.present_count = 0
         self.present_set = set()
-        self.present_set = set()
         self.sheets_loaded = False
+        
+        print(f"BlinkProcessor initialized. Total students: {self.total_students}")
 
     def reset_liveness(self):
         """Reset liveness detection state"""
