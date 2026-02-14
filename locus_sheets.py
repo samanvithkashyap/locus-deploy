@@ -37,7 +37,7 @@ SCOPES = [
     'https://www.googleapis.com/auth/drive'
 ]
 
-@st.cache_resource(ttl=3600)  # Cache for 1 hour
+@st.cache_resource(ttl=3600)
 def get_google_sheets_client():
     """Initialize Google Sheets client from Streamlit secrets"""
     try:
@@ -51,43 +51,35 @@ def get_google_sheets_client():
         st.error(f"Failed to connect to Google Sheets: {e}")
         return None
 
-def get_or_create_attendance_sheet(client, sheet_name=None):
-    """Get or create today's attendance sheet"""
-    if client is None:
+@st.cache_resource(ttl=3600)
+def get_or_create_attendance_sheet(_sheets_client):
+    """Get or create attendance spreadsheet"""
+    if _sheets_client is None:
         return None
     
-    if sheet_name is None:
-        sheet_name = st.secrets.get("sheet_name", "LOCUS_Attendance")
-    
     try:
-        # Try to open existing spreadsheet BY ID (better than name)
-        sheet_id = st.secrets.get("sheet_id", None)
+        sheet_id = st.secrets.get("sheet_id")
         if sheet_id:
-            spreadsheet = client.open_by_key(sheet_id)
+            spreadsheet = _sheets_client.open_by_key(sheet_id)
         else:
-            spreadsheet = client.open(sheet_name)
-    except gspread.SpreadsheetNotFound:
-        st.error(f"❌ Spreadsheet '{sheet_name}' not found. Please create it manually and add the sheet_id to secrets!")
-        return None
-    except Exception as e:
-        st.error(f"❌ Error opening spreadsheet: {e}")
-        return None
-    
-    # Get or create today's worksheet
-    today = datetime.now().strftime('%Y-%m-%d')
-    
-    try:
-        worksheet = spreadsheet.worksheet(today)
-    except gspread.WorksheetNotFound:
+            sheet_name = st.secrets.get("sheet_name", "LOCUS_Attendance")
+            spreadsheet = _sheets_client.open(sheet_name)
+        
+        # Get or create today's worksheet
+        today = datetime.now().strftime('%Y-%m-%d')
         try:
-            worksheet = spreadsheet.add_worksheet(title=today, rows=100, cols=4)
-            # Add headers
-            worksheet.update('A1:D1', [['Name', 'USN', 'Time', 'Status']])
-        except Exception as e:
-            st.error(f"❌ Could not create worksheet: {e}. Using first sheet.")
-            worksheet = spreadsheet.get_worksheet(0)
-    
-    return worksheet
+            worksheet = spreadsheet.worksheet(today)
+        except gspread.WorksheetNotFound:
+            try:
+                worksheet = spreadsheet.add_worksheet(title=today, rows=100, cols=4)
+                worksheet.update([['Name', 'USN', 'Time', 'Status']], 'A1:D1')
+            except:
+                worksheet = spreadsheet.get_worksheet(0)
+        
+        return worksheet
+    except Exception as e:
+        st.error(f"Failed to open attendance sheet: {e}")
+        return None
 
 def mark_attendance_sheets(folder_name, worksheet):
     """Mark attendance in Google Sheets"""
@@ -97,19 +89,14 @@ def mark_attendance_sheets(folder_name, worksheet):
     name, usn = get_student_details(folder_name)
     
     try:
-        # Get all existing records
         records = worksheet.get_all_records()
-        
-        # Check if already marked
         for record in records:
             if record.get('Name') == name:
                 return False, name
         
-        # Add new attendance record
         now = datetime.now().strftime('%H:%M:%S')
         worksheet.append_row([name, usn, now, 'Present'])
         return True, name
-        
     except Exception as e:
         st.error(f"Error marking attendance: {e}")
         return False, name
@@ -118,7 +105,6 @@ def get_present_students(worksheet):
     """Get list of present students from Google Sheets"""
     if worksheet is None:
         return []
-    
     try:
         records = worksheet.get_all_records()
         return [record['Name'] for record in records if record.get('Name')]
@@ -145,9 +131,18 @@ else:
     db = {"features": [], "names": []}
     all_student_names = set()
 
-# Initialize Google Sheets
-sheets_client = get_google_sheets_client()
-attendance_sheet = get_or_create_attendance_sheet(sheets_client)
+# Initialize Google Sheets (lazy - only when needed)
+sheets_client = None
+attendance_sheet = None
+
+def ensure_sheets_connected():
+    """Connect to sheets only when needed"""
+    global sheets_client, attendance_sheet
+    if sheets_client is None:
+        sheets_client = get_google_sheets_client()
+    if attendance_sheet is None and sheets_client:
+        attendance_sheet = get_or_create_attendance_sheet(sheets_client)
+    return attendance_sheet
 
 # --- AI PROCESSOR ---
 class BlinkProcessor:
@@ -196,9 +191,10 @@ class BlinkProcessor:
         self.present_count = 0
         self.present_set = set()
         
-        # Load present students from Google Sheets
-        if attendance_sheet:
-            present_list = get_present_students(attendance_sheet)
+        # Load present students from Google Sheets (lazy)
+        sheet = ensure_sheets_connected()
+        if sheet:
+            present_list = get_present_students(sheet)
             valid_present = [x for x in present_list if x in all_student_names]
             self.present_set = set(valid_present)
             self.present_count = len(self.present_set)
@@ -359,7 +355,8 @@ class BlinkProcessor:
                                 best_name = db["names"][idx]
                         
                         if best_score > COSINE_THRESHOLD:
-                            marked, final_name = mark_attendance_sheets(best_name, attendance_sheet)
+                            sheet = ensure_sheets_connected()
+                            marked, final_name = mark_attendance_sheets(best_name, sheet)
                             if final_name not in self.present_set:
                                 self.present_set.add(final_name)
                                 self.present_count += 1
@@ -401,10 +398,11 @@ class BlinkProcessor:
 st.set_page_config(page_title="LOCUS", layout="wide")
 st.title("LOCUS")
 
-# Show Google Sheets status
-if sheets_client and attendance_sheet:
+# Show Google Sheets status (lazy load)
+sheet = ensure_sheets_connected()
+if sheet:
     st.success("✅ Connected to Google Sheets")
-    sheet_url = f"https://docs.google.com/spreadsheets/d/{attendance_sheet.spreadsheet.id}"
+    sheet_url = f"https://docs.google.com/spreadsheets/d/{sheet.spreadsheet.id}"
     st.markdown(f"[📊 View Attendance Sheet]({sheet_url})")
 else:
     st.error("❌ Not connected to Google Sheets - Check secrets configuration")
@@ -414,7 +412,7 @@ if st.sidebar.button("🔄 Sync List"):
     st.rerun()
 
 all_students_clean = sorted(list(all_student_names))
-present_students = get_present_students(attendance_sheet) if attendance_sheet else []
+present_students = get_present_students(sheet) if sheet else []
 
 absentees = sorted(list(set(all_students_clean) - set(present_students)))
 st.sidebar.metric("Remaining", len(absentees))
