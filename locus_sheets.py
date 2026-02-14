@@ -37,7 +37,7 @@ SCOPES = [
     'https://www.googleapis.com/auth/drive'
 ]
 
-@st.cache_resource
+@st.cache_resource(ttl=3600)  # Cache for 1 hour
 def get_google_sheets_client():
     """Initialize Google Sheets client from Streamlit secrets"""
     try:
