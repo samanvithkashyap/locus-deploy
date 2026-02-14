@@ -424,23 +424,15 @@ else:
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     st.caption("Turn your head slowly to verify & mark attendance.")
-    webrtc_streamer(
-        key="locus-safe",
+    ctx = webrtc_streamer(
+        key="locus-attendance",
         mode=WebRtcMode.SENDRECV,
         rtc_configuration={
-            "iceServers": [
-                {"urls": ["stun:stun.l.google.com:19302"]},
-                {"urls": ["stun:stun1.l.google.com:19302"]},
-                {"urls": ["stun:stun2.l.google.com:19302"]},
-            ]
+            "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
         },
         video_processor_factory=BlinkProcessor,
         media_stream_constraints={
-            "video": {
-                "width": {"ideal": 1024},
-                "height": {"ideal": 720},
-                "facingMode": "user"  # Front camera on mobile
-            },
+            "video": True,
             "audio": False
         },
         async_processing=True,
